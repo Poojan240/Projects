@@ -1,0 +1,256 @@
+import java.util.*;
+import java.text.*;
+import java.io.*;
+import java.util.Random;
+
+
+public class Bank 
+{
+    private int _numberOfResources;
+    private int _numCustomers;
+    private int _availableAmount[];
+    private int _maxDemand[][];
+    private int _allocationAmount[][];
+    private int _resourcesNeeded[][]; 
+
+    // Constructor for the bank class. Sets up all variables. 
+    public Bank(int resources, int customers) 
+    {
+        _numberOfResources = resources;
+        _numCustomers = customers;
+        
+        _availableAmount = new int[resources];
+        _maxDemand = new int[customers][resources];
+        
+        _allocationAmount = new int[customers][resources];
+        _resourcesNeeded = new int[customers][resources];
+        
+        // Assign available amount. 
+        for (int i=0; i < _numberOfResources; i++)
+            _availableAmount[i] = (int)(1 + 9 * Math.random());
+        
+            // set up amount of resources each customer needs.
+        for (int i = 0; i < _resourcesNeeded.length; i++) 
+        {
+            for (int j = 0; j < _resourcesNeeded[0].length; j++) 
+            {
+                _resourcesNeeded[i][j] = (int)(Math.ceil(Math.random() * _availableAmount[j]));
+                _maxDemand[i][j] = _resourcesNeeded[i][j];
+                _allocationAmount[i][j] = 0;
+            }
+        }
+        
+        // display the available vector, maximum demand and allocation
+        PrintAvailable();
+        PrintMaxDemand();
+        PrintAllocation();
+    }
+
+    public synchronized void RequestResources(int customer_num) 
+    {
+        boolean isSafeSpace = true; // checks if state is safe
+        boolean hypothetical = false; // checks if hypothetical is in play 
+        boolean allComplete = false; 
+        
+        boolean tasksFinished[] = new boolean[_numCustomers];
+        int customerRequest[] = new int[_numberOfResources];
+        int work[] = new int[_numberOfResources];
+        int safeSquence[] = new int[_numCustomers];
+        
+        int safeIndex = 0;
+        int customerIndex = 0;
+
+        // init the customer request
+        for (int i = 0; i < customerRequest.length; i++)
+            customerRequest[i] = (int)(Math.ceil(Math.random() * _resourcesNeeded[customer_num][i]));
+
+        // init the final task
+        for (int i = 0; i < tasksFinished.length; i++)
+            tasksFinished[i] = false;
+
+        // print request
+        PrintRequest(customer_num, customerRequest);
+        System.out.print("]");
+
+        //determines if allocation is possible
+        for (int i= 0; i < customerRequest.length; i++)
+            if (customerRequest[i] > _availableAmount[i])
+                isSafeSpace = false;
+
+        // checking for situation where allocation is granted
+        if(isSafeSpace)
+        {
+            hypothetical = true;
+            for (int i =0; i < _availableAmount.length; i++) 
+            {
+                _availableAmount[i] -= customerRequest[i];
+                work[i] = _availableAmount[i];
+                _allocationAmount[customer_num][i] += customerRequest[i];
+                _resourcesNeeded[customer_num][i] -= customerRequest[i];
+            }
+        }
+
+        while (isSafeSpace && !allComplete) 
+        {
+            boolean customerFound = false;
+            boolean workFlag;
+
+            customerIndex = 0;
+            while(!customerFound && customerIndex < _numCustomers) 
+            {
+                workFlag = true;
+
+                //checking if need <= work
+                for (int i = 0; i < _resourcesNeeded[0].length; i++)
+                    if (_resourcesNeeded[customerIndex][i] > work[i])
+                        workFlag = false;
+                if (!tasksFinished[customerIndex] && workFlag)
+                    customerFound = true;
+                else
+                    customerIndex++;
+
+            }
+
+            // if no customer found, safe state not found
+            if(!customerFound)
+                isSafeSpace = false;
+
+            if (isSafeSpace) 
+            {
+                //set current customer to finish
+                tasksFinished[customerIndex] = true;
+
+                //put current customer to safe sequence
+                safeSquence[safeIndex] = customerIndex;
+                safeIndex++; 
+
+                // sum of allocation to working table
+                for (int i=0; i < _numberOfResources; i++)
+                    work[i] += _allocationAmount[customerIndex][i];
+            }
+
+            //assumed all finished
+            allComplete = true;
+
+            // if any of the customer not finished
+            for (int i = 0; i< tasksFinished.length; i++)
+                if(!tasksFinished[i])
+                    allComplete = false;
+
+        }
+
+        //displays report and allocated values
+        if (isSafeSpace) {
+
+            //displays safe sequence
+            System.out.print("\nBank - Safe Sequence: \n[");
+            for (int i=0; i< safeSquence.length; i++) 
+            {
+                System.out.print(safeSquence[i]);
+                if (i< (_numCustomers - 1))
+                    System.out.print(", ");
+            }
+            System.out.print("]");
+
+            //display available, allocation and need
+            PrintAvailable();
+            PrintAllocation();
+        }
+        else {
+            if (hypothetical) 
+            {
+                for (int i=0; i < _allocationAmount[0].length; i++) 
+                {
+                    _allocationAmount[customer_num][i] -= customerRequest[i];
+                    _resourcesNeeded[customer_num][i] += customerRequest[i];
+                    _availableAmount[i] += customerRequest[i];
+                }
+            }
+
+            // displays the bank not in safe state
+            System.out.print("\nBank - Safe state not found");
+
+            // displays the customers that needs to wait
+            System.out.print("\nCustomer " + customer_num + " must wait");
+
+            try {
+              wait();
+            }
+            catch(InterruptedException e) {}
+        }           
+    }
+
+    public void PrintRequest(int customer_num, int customerRequest[])
+    {
+        System.out.print("\nCustomer " + customer_num + " making request: \n[");
+        for (int i = 0; i < customerRequest.length; i++)
+        {
+            System.out.print(customerRequest[i]);
+            if (i < (customerRequest.length - 1))
+                System.out.print(", ");
+        }
+    }
+
+    public synchronized void ReleaseResourcesFromCustomer(int customer_num) {
+
+        // display the resources being released
+        System.out.print("\nCustomer " + customer_num + " releasing resources:\n[");
+        PrintSingleArray(_allocationAmount[customer_num]);
+        
+        // release resources
+        for (int i=0; i < _allocationAmount[customer_num].length; i++) {
+            _availableAmount[i] += _allocationAmount[customer_num][i];
+            _resourcesNeeded[customer_num][i] = _maxDemand[customer_num][i];
+            _allocationAmount[customer_num][i] = 0;
+        }
+
+        notifyAll();
+    }
+
+    // displays all available vector
+    public synchronized void PrintAvailable() 
+    {
+        System.out.print("\nBank - Resources Available: \n[");
+        PrintSingleArray(_availableAmount);
+    }
+
+    //displays the maximum demand matrix
+    public void PrintMaxDemand() 
+    {
+        System.out.print("\nBank - _maxDemand: ");
+        PrintDoubleArray(_maxDemand);
+    }
+
+    // displays the allocation matrix
+    public synchronized void PrintAllocation() 
+    {
+        System.out.print("\nBank - Allocation:");
+        PrintDoubleArray(_allocationAmount);
+    }
+    
+    private void PrintDoubleArray(int arr[][])
+    {
+        for (int i = 0; i < arr.length; i++) 
+        {
+            System.out.print("\n[");
+            for (int j = 0; j < arr[0].length; j++) 
+            {
+                System.out.print(arr[i][j]);
+                if (j < (arr[0].length - 1))
+                    System.out.print(", ");
+            }
+            System.out.print("]");
+        }
+    }
+    
+    private void PrintSingleArray(int arr[])
+    {
+        for (int i= 0; i < arr.length; i++) 
+        {
+            System.out.print(arr[i]);
+            if (i < (arr.length - 1))
+                System.out.print(", ");
+        }
+        System.out.print("]");
+    }
+}

@@ -1,0 +1,209 @@
+
+//Name : Poojan Bahadur Pradhan
+
+
+#include <iostream> 
+#include <mutex> 
+#include <pthread.h> 
+#include <stdlib.h> 
+ 
+using namespace std; 
+const int TOTALMEM = 100;
+const int MAXDEGREEMP =4;
+const int MAXPROCESSES =8;
+pthread_mutex_t lock1;  //lock for println
+pthread_mutex_t lock2;  // lock for getmemory and degree check
+pthread_cond_t memorylock=PTHREAD_COND_INITIALIZER;  // for memory lock 
+pthread_cond_t degreelock=PTHREAD_COND_INITIALIZER;  // for degree lock
+
+void println (string s)
+{  
+    pthread_mutex_lock(&lock1);
+    cout << s << endl;
+    pthread_mutex_unlock(&lock1);
+} 
+ struct Memory 
+ {     
+  int id; 
+  int size; 
+ };  
+class Scheduler
+{ 
+ 	private: 
+  int id;   
+  int totMem;   
+  int freeMem; 
+  Memory memory[MAXDEGREEMP+1];  
+  int next;
+	 
+public:   
+	 
+  Scheduler ();   
+  Scheduler (int);   
+  void displayProcesses ();   
+  void getMemory (int , int );   
+  void returnMemory (int , int ); 
+}; 
+ 
+Scheduler::Scheduler ()
+{   
+  totMem = 0;   
+  freeMem = 0; 
+  next = 0; 
+} 
+ 
+Scheduler::Scheduler (int totMem)
+{    
+ totMem= totMem;   
+ freeMem = totMem; 
+		for (int i = 0; i < MAXDEGREEMP+1; i++) 
+			{       
+				memory[i].id = 0;
+				memory[i].size = 0; 
+			}    
+		next = 0; 
+}  
+void Scheduler::displayProcesses ()
+{ 
+         if ( next == 0) return;       
+				string pl = ""; 
+        for (int i = 0; i < next; i++) 
+                pl = pl + "Process " +  to_string(memory[i].id+1) +  ": memory size = " + to_string(memory[i].size) + "  "; 
+        println (pl); 
+}  
+void Scheduler::getMemory (int id, int need) 
+{   //lock for free memory
+	int id1=id;
+	pthread_mutex_lock(&lock2);
+	if(need>freeMem)     // change made to check the memory
+	{
+		
+		cout<<"Thread"<<id1+1<<"is waiting for free memory :memory required "<<need<<":available is"<<endl
+		<<freeMem<<endl;
+		//lock  for waiting
+		pthread_cond_wait(&memorylock,&lock2);
+	}
+ freeMem = freeMem - need;  
+	if(next>MAXDEGREEMP)
+	{
+		cout<<endl<<" degree exceeded"<<endl;
+		pthread_cond_wait(&degreelock,&lock2);
+	}
+  memory[next].id = id;    
+  memory[next].size = need; 
+  println ("getMemory:  assigned id " +  to_string(++id1) + " memory size " + to_string(need)); 
+  next++;      
+  displayProcesses (); 
+	// unlock
+  pthread_mutex_unlock(&lock2);
+  return; 
+}  
+void Scheduler::returnMemory (int id, int need)
+{    int id1=id;
+     pthread_mutex_lock(&lock2);
+     bool found = false; 
+      for (int i = 0; i < MAXDEGREEMP; i++)
+			{           
+      	if (id == memory[i].id) 
+				{                    
+			found = true; 
+			freeMem = freeMem + memory[i].size;            
+       for (int j = i + 1; j < next; j++)
+			 	   {             
+                    memory[j-1].id = memory[j].id;     
+                    memory[j-1].size = memory[j].size; 
+                   }                      
+  		  next--;       
+          memory[next].id = 0; 
+          memory[next].size = 0;   
+        // pass signal		  
+		pthread_cond_signal(&memorylock);
+		pthread_cond_signal(&degreelock);
+           break; 
+				}  
+			}   
+	   pthread_mutex_unlock(&lock2);
+		 if (!found) 
+      println ("Error in program:" +  to_string(id1++) + " " + to_string(need)); 
+ 	  println ("returnMemory:  returned id " +  to_string(++id1) +  " memory size " + to_string(need)); 
+      displayProcesses (); 
+			return; 
+}  
+class Process
+{ 
+ private:  
+  
+  int id;  
+  unsigned int sid;  /* seed for rand */ 
+  Scheduler* scheduler; 
+  int neededMemory; 
+ public: 
+	
+Process (int, Scheduler*);   
+void run();
+}; 
+
+Process::Process (int identifier, Scheduler* scheduler1)
+{   
+	id = identifier;   
+	sid =id;    
+	scheduler = scheduler1; 
+	neededMemory = 1 + rand_r(&sid) % TOTALMEM; 
+}  
+
+	// process class passed from main functio
+void Process::run() 
+	{  
+       
+			scheduler->getMemory (id, neededMemory); //accessing the getmemory
+  		sleep (1);
+			scheduler->returnMemory (id, neededMemory); //accessing the returnmemory
+	    int count=id;
+			count++;
+			println ("process " + to_string(count) + ":  finished"); 	
+	}
+
+void *runcaller(void *process)
+{
+
+ Process *process1=*((Process* *) process);
+ process1->run();  
+ return NULL;
+}
+
+  int main (int argc, const char * argv[])
+	{  
+		int err;
+   
+		pthread_t thread[MAXPROCESSES];//an array of threads
+		Process* process[MAXPROCESSES];// an array of process
+    
+		Scheduler* scheduler1 = new Scheduler (TOTALMEM); 
+		for(int i=0;i<MAXPROCESSES;++i)
+				{      //an array of process
+				 process[i]=new Process(i,scheduler1);// process constructor called
+				} 
+   
+			println ("All processes are active."); 
+		for(int j=0;j<MAXPROCESSES;++j)
+				{
+		// creation of threads 	
+		err=pthread_create(&thread[j], NULL, runcaller ,(void*)&process[j]);
+				} 
+		
+ 
+		
+	
+		
+	if(err)
+		{
+		cout<< "error is"<< err;
+		exit(-1);
+		}
+		for(int k=0;k<MAXPROCESSES;++k)
+		{
+		pthread_join(thread[k], NULL);
+		}
+		println ("All processes have completed."); 
+  	return 0; 
+	}

@@ -1,0 +1,39 @@
+
+public class Customer extends Thread {
+
+	private int _customerId;
+	private Bank _bank;
+	private int _numberOfAttemptsRequested;
+	private final int _maximumNumberOfAttempts = 3;
+	
+	public Customer(int n, Bank b) 
+	{
+		_customerId = n;
+		_bank = b;
+		_numberOfAttemptsRequested = 0;
+	}
+	
+	
+	public void run() 
+	{
+		for (int i = 0; i < _maximumNumberOfAttempts; i++) 
+		{
+			// Requesting resources from customer
+			_bank.RequestResources(_customerId);
+			
+			//attempt counter increments
+			_numberOfAttemptsRequested++;
+			
+			try {
+				Thread.sleep((int)(Math.random()*5000));
+			}
+			catch(InterruptedException e) {}
+		}
+		// busy wait that hold resources until at three requests have been made
+		while (_numberOfAttemptsRequested < _maximumNumberOfAttempts) {}
+			
+		//release resources allocated for this customer
+		_bank.ReleaseResourcesFromCustomer(_customerId);
+		
+	}
+}

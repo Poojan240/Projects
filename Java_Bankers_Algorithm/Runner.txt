@@ -1,0 +1,59 @@
+
+
+public class Runner {
+    public static void main(String args[]) 
+    {
+
+        // Switch out these numbers to run the program. 
+        int r = Integer.parseInt(args[0]);
+        int c = Integer.parseInt(args[1]); 
+
+        RunSingular(r,c);
+    }
+
+    public static void RunAll()
+    {
+        for(int x = 1; x <= 10; x++){
+            for(int y = 1; y <= 10; y++){
+                System.out.println("\n-----------------------------------------------------------------");
+                System.out.println("Now running " + x + " resources, " + y + " customers");
+                System.out.println("-----------------------------------------------------------------\n");
+                RunSingular(x,y);
+            }
+        }
+    }
+
+    public static void RunSingular(int resourceCount, int customerCount)
+    {
+        Thread[] threads;
+        Customer[] customers;
+        
+        Bank bank = new Bank(resourceCount, customerCount);
+        customers = new Customer[customerCount];
+        threads = new Thread[customerCount];
+
+        for (int i = 0; i< customers.length; i++) 
+        {
+            customers[i] = new Customer(i, bank);
+            threads[i] = new Thread(customers[i]);
+        }
+
+        for (int i=0; i< customers.length; i++)
+            threads[i].start();
+
+        for (int i=0; i< customers.length; i++)
+        {
+            try {
+                threads[i].join();
+            }
+            catch(InterruptedException e) {}
+        }
+
+        // Outputs the final state. 
+        System.out.print("\n\nFinal Available Vector: ");
+        bank.PrintAvailable();
+
+        System.out.print("\n\nFinal Allocation Matrix: ");
+        bank.PrintAllocation();
+    }
+}
